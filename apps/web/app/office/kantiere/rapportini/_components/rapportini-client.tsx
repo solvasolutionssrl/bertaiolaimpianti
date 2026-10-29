@@ -1,5 +1,6 @@
 'use client';
 
+import { OreInput } from '../../_components/ore-input';
 import * as React from 'react';
 import { ZONA_DIPENDENTI } from '@kommessa/api/zone-dati';
 import { TagTu } from '@/app/_components/tag-tu';
@@ -1356,26 +1357,26 @@ export function RapportiniClient({
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <label className="text-xs font-medium text-muted-foreground">Ore di lavoro</label>
-                <input
-                  type="number"
-                  min={0}
-                  max={24}
-                  step={0.25}
-                  value={regLavoro}
-                  onChange={(e) => setRegLavoro(parseFloat(e.target.value) || 0)}
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                <OreInput
+                  minuti={Math.round(regLavoro * 60)}
+                  onChange={(m) => setRegLavoro(m / 60)}
+                  passo={15}
+                  max={24 * 60}
+                  ariaLabel={'Ore di lavoro'}
+                  pieno
+                  className="[&>input]:flex-1"
                 />
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-medium text-muted-foreground">Ore di viaggio</label>
-                <input
-                  type="number"
-                  min={0}
-                  max={24}
-                  step={0.25}
-                  value={regViaggio}
-                  onChange={(e) => setRegViaggio(parseFloat(e.target.value) || 0)}
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                <OreInput
+                  minuti={Math.round(regViaggio * 60)}
+                  onChange={(m) => setRegViaggio(m / 60)}
+                  passo={15}
+                  max={24 * 60}
+                  ariaLabel={'Ore di viaggio'}
+                  pieno
+                  className="[&>input]:flex-1"
                 />
               </div>
             </div>

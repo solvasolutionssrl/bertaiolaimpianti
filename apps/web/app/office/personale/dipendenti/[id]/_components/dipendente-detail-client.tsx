@@ -120,6 +120,8 @@ interface Props {
   calendario: { mese: string; giorni: GiornoCalendario[] };
   /** Il flag dell'orario forfettario serve solo dove c'e' l'export paghe. */
   mostraForfettario?: boolean;
+  /** La card «Monte ore del mese» (componente server), in cima alla colonna di destra. */
+  monteOre?: React.ReactNode;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -272,6 +274,7 @@ export function DipendenteDetailClient({
   minutiGuida,
   calendario,
   mostraForfettario = false,
+  monteOre = null,
 }: Props) {
   const router = useRouter();
 
@@ -664,6 +667,8 @@ export function DipendenteDetailClient({
 
         {/* ── RIGHT (sidebar, 1/3, sticky) ── */}
         <div className="space-y-4 lg:sticky lg:top-4 lg:self-start">
+          {/* Monte ore del mese: la stessa card di Analisi, per questa persona */}
+          {monteOre}
           {/* Anagrafica compatta (editabile) */}
           <Sezione
             header={
@@ -758,7 +763,7 @@ export function DipendenteDetailClient({
                       <span>
                         Orario forfettario
                         <span className="block text-xs text-muted-foreground">
-                          Nell&apos;export paghe ogni giornata lavorata vale l&apos;orario pieno. Le ore registrate non cambiano.
+                          Nell&apos;export paghe una giornata lavorata in settimana vale l&apos;orario pieno; di sabato e nei festivi valgono le ore fatte, fino a una giornata. Le ore registrate non cambiano.
                         </span>
                       </span>
                     </label>

@@ -286,9 +286,12 @@ export async function caricaMese(tenantId: string, periodo: string): Promise<Mod
       data: giornata.data,
       minutiStraordinari: totali.minutiStraordinari,
       minutiViaggioEccedente: totali.minutiViaggioEccedenti,
+      // Le ore fatte, fino a una giornata intera: in un feriale vale comunque
+      // l'orario pieno (nessuna riga), di sabato e nei festivi diventano lo
+      // straordinario del giorno senza superare la giornata.
       minutiForfait:
         forfettari.has(giornata.dipendente_id) && totali.minutiLavoro + totali.minutiViaggio > 0
-          ? minutiGiornataIntera
+          ? Math.min(totali.minutiLavoro + totali.minutiViaggio, minutiGiornataIntera)
           : null,
     });
   }

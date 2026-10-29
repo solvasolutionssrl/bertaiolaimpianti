@@ -148,8 +148,6 @@ export default async function AnalisiPage() {
       : null;
 
   return (
-    <div className="space-y-4">
-    {monteOre ? <MonteOreCard persone={monteOre.persone} periodo={ym} /> : null}
     <AnalisiClient
       kpi={{
         totale: rich.length,
@@ -166,8 +164,8 @@ export default async function AnalisiPage() {
       upcoming={upcoming}
       latest={latest}
       canDecide={canDecide}
+      laterale={monteOre ? <MonteOreCard persone={monteOre.persone} periodo={ym} /> : null}
     />
-    </div>
   );
 }
 

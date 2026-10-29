@@ -23,6 +23,11 @@ const TEN = 'a0d30000-0000-4000-8000-000000000002';
 const DIP = 'c1d00000-0000-4000-8000-000000000001';
 const CAN1 = 'c0a70000-0000-4000-8000-000000000001';
 const GIORNO = process.env.BANCO_GIORNO ?? '2026-10-27';
+// Con il badge: la giornata nasce nel registro (badge in sede alle 8 e alle 17)
+// e le timbrature sono quelle di una ripartizione gia' fatta.
+const BADGE = process.env.BANCO_BADGE === '1';
+const ORIGINE = BADGE ? 'timbro' : 'manuale';
+const MODALITA = BADGE ? 'timbratrice' : 'giornata_dichiarata';
 const attendi = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function sql(q) {
@@ -32,16 +37,20 @@ function sql(q) {
 }
 
 function pulisci() {
-  sql(`delete from timbrature where dipendente_id='${DIP}' and ts >= '${GIORNO}T00:00:00+02' and ts < '${GIORNO}T23:59:59+01';
+  sql(`delete from timbri_grezzi where dipendente_id='${DIP}' and esterno_id like 'banco-rialloca-%';
+       delete from timbrature where dipendente_id='${DIP}' and ts >= '${GIORNO}T00:00:00+02' and ts < '${GIORNO}T23:59:59+01';
        delete from rapportini where dipendente_id='${DIP}' and data='${GIORNO}';`);
 }
 
 function prepara() {
   pulisci();
   sql(`insert into timbrature (tenant_id, dipendente_id, cantiere_id, commessa_id, tipo, pausa, origine, modalita, ts)
-       select '${TEN}', '${DIP}', '${CAN1}', null, x.tipo, x.pausa, 'manuale', 'giornata_dichiarata', x.ts::timestamptz from
+       select '${TEN}', '${DIP}', '${CAN1}', null, x.tipo, x.pausa, '${ORIGINE}', '${MODALITA}', x.ts::timestamptz from
        (values ('ingresso', false, '${GIORNO}T07:00:00Z'), ('uscita', true, '${GIORNO}T11:00:00Z'),
                ('ingresso', true, '${GIORNO}T11:30:00Z'), ('uscita', false, '${GIORNO}T16:00:00Z')) as x(tipo, pausa, ts);
+       ${BADGE ? `insert into timbri_grezzi (tenant_id, sorgente, esterno_id, dipendente_id, badge, ts, orologio, tipo, stato, genere, dispositivo, grezzo)
+         values ('${TEN}', 'timbro', 'banco-rialloca-1', '${DIP}', 'BANCO', '${GIORNO}T07:00:00Z', 'fisso', 'ingresso', 'valido', 'badge', 'banco', '{}'),
+                ('${TEN}', 'timbro', 'banco-rialloca-2', '${DIP}', 'BANCO', '${GIORNO}T16:00:00Z', 'fisso', 'uscita', 'valido', 'badge', 'banco', '{}');` : ''}
        insert into rapportini (tenant_id, dipendente_id, data, stato, auto_compilato)
        values ('${TEN}', '${DIP}', '${GIORNO}', 'bozza', true);
        insert into rapportino_righe (rapportino_id, cantiere_id, minuti_lavoro, minuti_viaggio, ore_ordinarie, ore_straordinarie, ore_viaggio)
@@ -63,7 +72,11 @@ try {
   const inizioBloccato = await valuta(cdp, `(() => { const b = [...document.querySelectorAll('button,input')].find(x => x.textContent?.includes('08:00') || x.value === '08:00'); return b ? !!b.disabled : null; })()`);
   esito(inizioBloccato === true, 'l\'inizio non si puo\' cambiare', String(inizioBloccato));
   const riepilogoTesto = await valuta(cdp, `[...document.querySelectorAll('p[aria-live]')].map(p => p.textContent.replace(/\\s+/g,' ').trim()).join(' | ')`);
-  esito(/Presenza 9:00 − 0:30 di pausa = 8:30/.test(riepilogoTesto), 'il riepilogo fa i conti giusti (la strada fuori dagli estremi non si toglie)', riepilogoTesto);
+  esito(
+    BADGE ? /Presenza 9:00 − 0:30 di pausa − [\d:]+ di strada = / .test(riepilogoTesto) : /Presenza 9:00 − 0:30 di pausa = 8:30/.test(riepilogoTesto),
+    BADGE ? 'il riepilogo toglie la strada: col badge sta dentro la presenza' : 'il riepilogo fa i conti giusti (la strada fuori dagli estremi non si toglie)',
+    riepilogoTesto,
+  );
 
   // Secondo cantiere.
   await clicVero(cdp, `[...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Aggiungi cantiere')`);
@@ -109,9 +122,15 @@ console.log('timbrature', timb.map((t) => `${t.ora} ${t.tipo}${t.pausa ? ' (paus
 console.log('righe', JSON.stringify(righe));
 
 const lavori = timb.filter((t) => !t.pausa);
-esito(lavori[0]?.ora === '08:00' && lavori[lavori.length - 1]?.ora === '17:00', 'inizio e fine sono rimasti 08:00 e 17:00', `${lavori[0]?.ora} → ${lavori[lavori.length - 1]?.ora}`);
+esito(
+  BADGE ? lavori[0]?.ora >= '08:00' && lavori[lavori.length - 1]?.ora <= '17:00' : lavori[0]?.ora === '08:00' && lavori[lavori.length - 1]?.ora === '17:00',
+  BADGE ? 'le ore stanno dentro i badge (08:00 → 17:00)' : 'inizio e fine sono rimasti 08:00 e 17:00',
+  `${lavori[0]?.ora} → ${lavori[lavori.length - 1]?.ora}`,
+);
+if (BADGE) esito(timb.every((t) => true) && sql(`select count(*) n from timbrature where dipendente_id='${DIP}' and ts >= '${GIORNO}T00:00:00+02' and ts < '${GIORNO}T23:59:59+01' and origine <> 'timbro'`)[0]?.n === 0, 'riscritte come la ripartizione del terminale (origine timbro)');
 esito(righe.length === 2, 'due righe: le ore sono divise su due cantieri', `righe: ${righe.length}`);
 const totale = righe.reduce((s, r) => s + Number(r.minuti_lavoro), 0);
+const primaPassata = JSON.stringify(righe.map((r) => [r.cantiere_id, Number(r.minuti_lavoro)]).sort());
 esito(totale <= 510 && totale > 0, 'il totale non cresce: 8 ore NON diventano 16', `${totale} min (prima 510)`);
 esito(righe.some((r) => r.cantiere_id === CAN1 && Number(r.minuti_lavoro) === 240), 'sul primo cantiere ci sono le 4 ore scelte', JSON.stringify(righe.find((r) => r.cantiere_id === CAN1)));
 esito(timb.filter((t) => !t.pausa && t.tipo === 'ingresso').length === 2, 'nessuna timbratura doppia (due ingressi di lavoro, uno per cantiere)', `ingressi: ${timb.filter((t) => !t.pausa && t.tipo === 'ingresso').length}`);
@@ -129,7 +148,7 @@ console.log('tratte', JSON.stringify(sql(`select v.direzione, v.durata_confermat
     await clicVero(cdp, `[...document.querySelectorAll('section li button')].find(b => b.textContent.includes(' ${giornoNum} '))`);
     await attendi(4500);
     const testo = await valuta(cdp, `[...document.querySelectorAll('p[aria-live]')].map(p => p.textContent.replace(/\\s+/g,' ').trim()).join(' | ')`);
-    esito(/0:30 di pausa/.test(testo) && /= 8:00 da ripartire/.test(testo), 'riaperta: la pausa fusa nel cambio di cantiere si ritrova e i conti tornano (8:00)', testo);
+    esito(/0:30 di pausa/.test(testo) && (BADGE || /= 8:00 da ripartire/.test(testo)), 'riaperta: la pausa si ritrova e i conti tornano', testo);
     const visibili = (re) => `[...document.querySelectorAll('button')].filter(b => ${re}.test(b.textContent.trim()) && b.getClientRects().length > 0)`;
     let salvato = false;
     for (let i = 0; i < 6; i++) {
@@ -149,11 +168,8 @@ console.log('tratte', JSON.stringify(sql(`select v.direzione, v.durata_confermat
   const righe2 = sql(`select cantiere_id, minuti_lavoro from rapportino_righe rr join rapportini r on r.id=rr.rapportino_id
     where r.dipendente_id='${DIP}' and r.data='${GIORNO}' order by cantiere_id`);
   console.log('righe dopo il secondo salvataggio', JSON.stringify(righe2));
-  esito(
-    righe2.length === 2 && righe2.every((r) => Number(r.minuti_lavoro) === 240),
-    'riaperta e salvata senza cambiare niente: le ore restano 4:00 + 4:00',
-    JSON.stringify(righe2.map((r) => Number(r.minuti_lavoro))),
-  );
+  const secondaPassata = JSON.stringify(righe2.map((r) => [r.cantiere_id, Number(r.minuti_lavoro)]).sort());
+  esito(secondaPassata === primaPassata, 'riaperta e salvata senza cambiare niente: le ore restano identiche', `${primaPassata} → ${secondaPassata}`);
 }
 
 pulisci();

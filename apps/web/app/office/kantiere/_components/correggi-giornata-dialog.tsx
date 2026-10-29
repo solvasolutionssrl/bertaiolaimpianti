@@ -1,5 +1,6 @@
 'use client';
 
+import { OreInput } from './ore-input';
 import * as React from 'react';
 import { PAUSA_PREDEFINITA_MIN } from '@kommessa/api/kantiere-pausa';
 import { useRouter } from 'next/navigation';
@@ -375,24 +376,23 @@ export function CorreggiGiornataDialog({
                             <div className="grid grid-cols-2 gap-2">
                               {(
                                 [
-                                  ['lavoro', 'Lavoro (ore)'],
-                                  ['viaggio', 'Viaggio (ore)'],
+                                  ['lavoro', 'Lavoro'],
+                                  ['viaggio', 'Viaggio'],
                                 ] as const
                               ).map(([campo, label]) => (
                                 <div key={campo} className="space-y-1">
                                   <label className="block text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                                     {label}
                                   </label>
-                                  <input
-                                    type="number"
-                                    min={0}
-                                    max={24}
-                                    step={0.25}
-                                    value={v[campo]}
-                                    onChange={(e) =>
-                                      setCampo(r.targetId, campo, parseFloat(e.target.value) || 0)
-                                    }
-                                    className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring"
+                                  {/* Ore e minuti (7:30): il campo numerico rifiutava «0:30» e lo faceva 0 */}
+                                  <OreInput
+                                    minuti={Math.round(v[campo] * 60)}
+                                    onChange={(m) => setCampo(r.targetId, campo, m / 60)}
+                                    passo={15}
+                                    max={24 * 60}
+                                    ariaLabel={label}
+                                    pieno
+                  className="[&>input]:flex-1"
                                   />
                                 </div>
                               ))}

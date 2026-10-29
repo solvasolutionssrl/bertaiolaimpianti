@@ -109,6 +109,7 @@ export function PermessiMobileClient({
             segnaposto="Tutti i tipi"
             etichettaNessuno="Tutti i tipi"
             segnapostoRicerca="Cerca un tipo…"
+            ricercaSempre
           />
         </div>
       ) : null}

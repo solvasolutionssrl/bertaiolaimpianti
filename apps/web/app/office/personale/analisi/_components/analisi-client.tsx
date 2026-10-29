@@ -102,6 +102,7 @@ export function AnalisiClient({
   upcoming,
   latest,
   canDecide,
+  laterale = null,
 }: {
   kpi: Kpi;
   perStato: { nome: string; valore: number; colore: string }[];
@@ -110,6 +111,8 @@ export function AnalisiClient({
   upcoming: { dipendenteNome: string; tipoLabel: string; dataInizio: string; dataFine: string; tuttoIlGiorno: boolean }[];
   latest: LatestRow[];
   canDecide: boolean;
+  /** Una colonna stretta a destra (circa un quinto): la card del monte ore. */
+  laterale?: React.ReactNode;
 }) {
   return (
     <div className="space-y-4">
@@ -123,8 +126,10 @@ export function AnalisiClient({
         </p>
       </header>
 
+      <div className={laterale ? 'grid gap-4 xl:grid-cols-[minmax(0,4fr)_minmax(0,1fr)] xl:items-start' : ''}>
+      <div className="min-w-0 space-y-4">
       {/* KPI compatti */}
-      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-6">
+      <div className={'grid grid-cols-2 gap-2.5 sm:grid-cols-3 ' + (laterale ? '2xl:grid-cols-6' : 'lg:grid-cols-6')}>
         <Kpi label="Richieste" value={kpi.totale} />
         <Kpi label="In attesa" value={kpi.inAttesa} tone="amber" />
         <Kpi label="Approvate" value={kpi.approvate} tone="emerald" />
@@ -263,6 +268,9 @@ export function AnalisiClient({
         mese sono le giornate registrate nei rapportini. Il residuo ferie richiede il monte-ore per
         contratto (in arrivo).
       </p>
+      </div>
+      {laterale ? <aside className="min-w-0">{laterale}</aside> : null}
+      </div>
     </div>
   );
 }

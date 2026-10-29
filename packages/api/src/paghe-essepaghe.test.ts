@@ -755,10 +755,15 @@ describe('orario forfettario', () => {
     expect(eventiDaGiornata({ ...base, data: '2026-06-15', minutiForfait: 480 })).toEqual([]);
   });
 
-  it('un sabato lavorato e\' una giornata forfettaria di straordinario del sabato', () => {
+  it('un sabato lavorato pieno vale una giornata di straordinario del sabato', () => {
     const eventi = eventiDaGiornata({ ...base, data: '2026-06-13', minutiForfait: 480 });
     expect(eventi).toHaveLength(1);
     expect(eventi[0]).toMatchObject({ causale: 'S9', ore: 8, record: '14' });
+  });
+
+  it('due ore di sabato sono due ore, non otto', () => {
+    const eventi = eventiDaGiornata({ ...base, data: '2026-06-13', minutiForfait: 120 });
+    expect(eventi[0]).toMatchObject({ causale: 'S9', ore: 2 });
   });
 
   it('senza il flag le ore vere passano come sempre', () => {

@@ -203,11 +203,12 @@ export interface GiornataKommessa {
   /** Minuti di viaggio oltre l'orario ordinario. */
   minutiViaggioEccedente: number;
   /**
-   * Orario forfettario (personalizzazione FPM, 28/10/2026): i minuti che il
-   * contratto riconosce per una giornata lavorata, a prescindere da quelle
-   * fatte. Valorizzato solo se la persona ha il flag **e** quel giorno ha
-   * lavorato davvero; in Kommessa le ore vere restano come sono, cambia solo
-   * cosa si dice al consulente.
+   * Orario forfettario (personalizzazione FPM, 28/10/2026): valorizzato solo
+   * se la persona ha il flag **e** quel giorno ha lavorato davvero. Sono le ore
+   * fatte, tagliate alla giornata intera. In un feriale la giornata vale
+   * l'orario pieno e non produce righe; di sabato e nei festivi questi minuti
+   * sono lo straordinario del giorno (due ore fatte = due ore, mai piu' di una
+   * giornata). In Kommessa le ore vere restano come sono.
    */
   minutiForfait?: number | null;
 }
@@ -284,8 +285,9 @@ export function eventiDaGiornata(
 
   // Forfettario: in un giorno feriale la giornata vale l'orario pieno, cioe'
   // nessuna variazione (niente straordinario, niente viaggio oltre l'orario).
-  // Di sabato e nei festivi l'orario teorico non c'e', quindi la giornata
-  // forfettaria intera e' lo straordinario di quel giorno, come per chiunque.
+  // Di sabato e nei festivi l'orario teorico non c'e': le ore fatte (al
+  // massimo una giornata, il taglio lo fa chi passa i minuti) sono lo
+  // straordinario di quel giorno.
   if (giornata.minutiForfait != null) {
     if (tipoGiorno(giornata.data) === 'feriale' || giornata.minutiForfait <= 0) return eventi;
     return [

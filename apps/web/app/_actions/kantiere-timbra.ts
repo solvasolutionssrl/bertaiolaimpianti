@@ -2238,9 +2238,9 @@ async function scriviGiornataRipartita(p: GiornataRipartitaInput): Promise<Resul
 // scatola del terminale (estremi fissi, `riempiScatola`), con lo stesso
 // scrittore di «Registra giornata».
 //
-// ⚠️ Solo giornate SENZA righe nel registro presenze (badge o presenza
-// dall'app): quelle hanno la loro ripartizione e il loro stato, e restano sul
-// dialog «Modifica giornata».
+// Con il registro presenze (badge o presenza dall'app) dal 29/10/2026: si
+// riscrive come la ripartizione del terminale, solo se la giornata e'
+// «coperta» e tutte le sue timbrature vengono dalla ripartizione.
 // ⚠️ Ordine: prima si scrive la giornata nuova, poi si tolgono le timbrature
 // vecchie (le tratte se ne vanno con loro). Se la scrittura non va, la
 // giornata resta com'era; se non va la cancellazione, si tolgono le nuove.
@@ -2259,6 +2259,10 @@ export interface GiornataDaRiallocare {
    * Meno la strada stimata, e' la pausa fusa nel cambio di cantiere.
    */
   buchiFraCantieriMin: number;
+  /** Giornata col registro: andata e ritorno stanno dentro la presenza (badge in sede). */
+  estremiInSede: boolean;
+  /** Almeno un badge del terminale (altrimenti presenza segnata dall'app). */
+  dalTerminale: boolean;
   righe: {
     cantiereId: string;
     sottocantiereId: string | null;
@@ -2289,6 +2293,8 @@ async function giornataDaRiallocare(
       intervalli: { inizioMs: number; fineMs: number }[];
       vecchieIds: string[];
       rapportinoId: string | null;
+      /** Giornata col registro presenze (badge o presenza dall'app): si riscrive come la ripartizione. */
+      registro: { dalTerminale: boolean } | null;
     }
   | { ok: false; error: MotivoNonRiallocabile | string }
 > {
@@ -2313,7 +2319,7 @@ async function giornataDaRiallocare(
     .eq('dipendente_id', dipendenteId)
     .gte('ts', fromIso)
     .lt('ts', toIso);
-  if ((nelRegistro ?? 0) > 0) return { ok: false, error: 'DAL_REGISTRO' };
+  const conRegistro = (nelRegistro ?? 0) > 0;
 
   const { data: timbRaw, error: eT } = await supabase
     .from('timbrature' as never)
@@ -2329,11 +2335,45 @@ async function giornataDaRiallocare(
   const est = estremiGiornata(timb.map((t) => ({ ...t, pausa: !!t.pausa })));
   if (!est.ok) return { ok: false, error: est.error };
 
+  // ── Giornata col registro (badge Timbro o presenza dall'app) ─────────────
+  // Estremi e pause timbrate li danno i timbri, come nella ripartizione: la
+  // presenza va dal badge di entrata a quello di uscita, e andata e ritorno
+  // stanno DENTRO. Si rialloca solo una giornata «coperta» e coerente le cui
+  // timbrature vengono tutte dalla ripartizione; il resto (turno dall'app
+  // chiuso col badge, giornate da verificare) resta al dialog di sempre.
+  let registro: { dalTerminale: boolean } | null = null;
+  let intervalli = est.intervalli;
+  let inizioMs = est.inizioMs;
+  let fineMs = est.fineMs;
+  let pausaTimbrataMin = est.pausaTimbrataMin;
+  let pausaDichiarataMin = est.pausaDichiarataMin;
+  if (conRegistro) {
+    const g = await leggiGiornataTimbro(supabase, tenantId, dipendenteId, giorno);
+    const presenza = g?.presenza;
+    if (!g || g.stato !== 'coperta' || !presenza || presenza.aperta || presenza.incoerente || presenza.intervalli.length === 0) {
+      return { ok: false, error: 'DAL_REGISTRO' };
+    }
+    const dalTerminale = g.sorgenti.includes('timbro');
+    const origineAttesa = dalTerminale ? 'timbro' : 'cronometro';
+    const modalitaAttesa = dalTerminale ? 'timbratrice' : 'app';
+    if (timb.some((t) => t.origine !== origineAttesa || (t.modalita !== null && t.modalita !== modalitaAttesa))) {
+      return { ok: false, error: 'DAL_REGISTRO' };
+    }
+    registro = { dalTerminale };
+    intervalli = presenza.intervalli.map((i) => ({ inizioMs: i.inizioMs, fineMs: i.fineMs }));
+    inizioMs = intervalli[0]!.inizioMs;
+    fineMs = intervalli[intervalli.length - 1]!.fineMs;
+    pausaTimbrataMin = presenza.minutiPausa;
+    // Le pause scritte dalla ripartizione hanno la modalita' del terminale:
+    // quella dichiarata e' cio' che c'e' oltre la pausa timbrata.
+    pausaDichiarataMin = Math.max(0, est.pausaTimbrataMin + est.pausaDichiarataMin - presenza.minutiPausa);
+  }
+
   // Una pausa fusa nel cambio di cantiere non e' segnata: resta solo il buco
   // fra un cantiere e l'altro. La strada di quel buco la stima il dialog (la
   // stessa stima usata scrivendo), e la differenza e' la pausa.
   const buchiFraCantieriMin =
-    est.pausaTimbrataMin === 0 && est.pausaDichiarataMin === 0
+    pausaTimbrataMin === 0 && pausaDichiarataMin === 0 && est.pausaTimbrataMin === 0 && est.pausaDichiarataMin === 0
       ? pausaImplicita(timb.map((t) => ({ ...t, pausa: !!t.pausa })), 0)
       : 0;
   // «Lavoro dalla sede sul progetto»: lo dice la sede scritta sulla timbratura.
@@ -2368,22 +2408,25 @@ async function giornataDaRiallocare(
     }));
   }
 
-  const nettoMin = est.intervalli.reduce((s, i) => s + Math.round((i.fineMs - i.inizioMs) / 60_000), 0);
+  const nettoMin = intervalli.reduce((s, i) => s + Math.round((i.fineMs - i.inizioMs) / 60_000), 0);
   return {
     ok: true,
     vista: {
       giorno,
-      inizioIso: new Date(est.inizioMs).toISOString(),
-      fineIso: new Date(est.fineMs).toISOString(),
+      inizioIso: new Date(inizioMs).toISOString(),
+      fineIso: new Date(fineMs).toISOString(),
       nettoMin,
-      pausaTimbrataMin: est.pausaTimbrataMin,
-      pausaDichiarataMin: est.pausaDichiarataMin,
+      pausaTimbrataMin,
+      pausaDichiarataMin,
+      estremiInSede: registro !== null,
+      dalTerminale: registro?.dalTerminale ?? false,
       buchiFraCantieriMin,
       righe,
     },
-    intervalli: est.intervalli,
+    intervalli,
     vecchieIds: timb.map((t) => t.id),
     rapportinoId: rapp?.id ?? null,
+    registro,
   };
 }
 
@@ -2448,20 +2491,30 @@ export async function riallocaMiaGiornata(input: unknown): Promise<Result> {
     giorno,
     split: parsed.data.split,
     percorso: parsed.data.percorso ?? null,
-    origine: 'manuale',
-    // Con una pausa timbrata la giornata resta «dall'app»: cosi' la pausa
-    // riscritta resta riconoscibile come timbrata alla prossima correzione.
-    modalita: pausaTimbrata ? 'app' : 'giornata_dichiarata',
+    // Col registro si riscrive come la ripartizione del terminale (stessa
+    // origine: non torna a Timbro e non si specchia nel registro). Senza,
+    // come «Registra giornata»; con una pausa timbrata la giornata resta
+    // «dall'app», cosi' la pausa riscritta resta riconoscibile come timbrata.
+    origine: g.registro ? (g.registro.dalTerminale ? 'timbro' : 'cronometro') : 'manuale',
+    modalita: g.registro
+      ? g.registro.dalTerminale
+        ? 'timbratrice'
+        : 'app'
+      : pausaTimbrata
+        ? 'app'
+        : 'giornata_dichiarata',
     // E' una giornata gia' lavorata: un cantiere chiuso nel frattempo non blocca.
     cantieriForzati: true,
     ingressoEsistente: null,
-    estremiDentro: false,
-    autoEstremi: false,
-    generaEventi: (viaggioPrima) =>
+    estremiDentro: g.registro !== null,
+    autoEstremi: g.registro !== null,
+    generaEventi: (viaggioPrima, andataMin, ritornoMin) =>
       riempiScatola({
         intervalli: g.intervalli,
         segmenti: parsed.data.split,
         viaggioPrima,
+        andataMin: g.registro ? andataMin : 0,
+        ritornoMin: g.registro ? ritornoMin : 0,
         pausaDichiarataMin,
         pausaDopoIndice: parsed.data.pausaDopoIndice ?? null,
       }),

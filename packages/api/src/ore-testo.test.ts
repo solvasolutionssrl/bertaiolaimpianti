@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { minutiDaTesto, testoDaMinuti } from './ore-testo';
+import { minutiDaTesto, oreDecimaliDaTesto, testoDaMinuti } from './ore-testo';
 
 describe('minutiDaTesto', () => {
   it('le forme che una persona scrive', () => {
@@ -32,5 +32,22 @@ describe('minutiDaTesto', () => {
     expect(testoDaMinuti(0)).toBe('');
     expect(testoDaMinuti(450)).toBe('7:30');
     expect(testoDaMinuti(5)).toBe('0:05');
+  });
+});
+
+describe('oreDecimaliDaTesto (campi delle paghe)', () => {
+  it('ore e minuti diventano centesimi', () => {
+    expect(oreDecimaliDaTesto('0:30')).toBe(0.5);
+    expect(oreDecimaliDaTesto('1:30')).toBe(1.5);
+    expect(oreDecimaliDaTesto('1h45')).toBe(1.75);
+  });
+  it('i decimali restano come prima', () => {
+    expect(oreDecimaliDaTesto('1,50')).toBe(1.5);
+    expect(oreDecimaliDaTesto('8')).toBe(8);
+    expect(oreDecimaliDaTesto('40')).toBe(40);
+  });
+  it('vuoto o illeggibile: niente', () => {
+    expect(oreDecimaliDaTesto('')).toBeNull();
+    expect(oreDecimaliDaTesto('abc')).toBeNull();
   });
 });

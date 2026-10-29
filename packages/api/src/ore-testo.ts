@@ -37,3 +37,22 @@ export function testoDaMinuti(min: number): string {
   const m = Math.round(min);
   return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`;
 }
+
+/**
+ * Ore decimali per i campi delle paghe (28/10/2026): il file vuole i
+ * centesimi (1,50 = un'ora e mezza), ma in Kommessa le ore si scrivono come
+ * ore e minuti. Qui valgono entrambe: con `:` o `h` e' ore e minuti
+ * (`1:30`, `1h30`), altrimenti decimale come prima (`1,5`, `8`, `40`). ⚠️ Un
+ * numero intero resta ore anche oltre 24: qui non c'e' la lettura «90 = minuti»
+ * del campo della giornata.
+ */
+export function oreDecimaliDaTesto(testo: string): number | null {
+  const t = testo.trim().toLowerCase().replace(/\s+/g, '');
+  if (t === '') return null;
+  if (/[:h]/.test(t)) {
+    const m = minutiDaTesto(t);
+    return m === null ? null : Math.round((m / 60) * 100) / 100;
+  }
+  const n = Number(t.replace(',', '.'));
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}

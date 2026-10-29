@@ -19,6 +19,7 @@ export function OreInput({
   disabled,
   ariaLabel = 'Ore',
   className,
+  pieno = false,
 }: {
   minuti: number;
   onChange: (m: number) => void;
@@ -28,6 +29,8 @@ export function OreInput({
   disabled?: boolean;
   ariaLabel?: string;
   className?: string;
+  /** Occupa tutta la larghezza disponibile (nei moduli a due colonne). */
+  pieno?: boolean;
 }) {
   const [testo, setTesto] = React.useState<string | null>(null); // null = non in modifica
   const [errore, setErrore] = React.useState(false);
@@ -44,8 +47,12 @@ export function OreInput({
     fissa(m);
     setTesto(null);
   };
+  // Mentre si scrive, come e' stato letto: «0,30» e' 18 minuti, non mezz'ora.
+  // Sta sotto il campo, in sovrimpressione, cosi' la riga non si sposta.
+  const letto = testo !== null && testo.trim() !== '' && !/^\d{1,2}:\d{2}$/.test(testo.trim()) ? minutiDaTesto(testo) : null;
   return (
-    <div className={cn('inline-flex h-10 items-stretch overflow-hidden rounded-md border border-input bg-background', errore && 'border-destructive', className)}>
+    <div className={pieno ? 'relative flex w-full' : 'relative inline-flex'}>
+    <div className={cn('inline-flex h-10', pieno && 'w-full', 'items-stretch overflow-hidden rounded-md border border-input bg-background', errore && 'border-destructive', className)}>
       <button type="button" tabIndex={-1} aria-label="Meno" disabled={disabled || minuti <= 0} onClick={() => fissa(minuti - passo)} className="w-8 shrink-0 border-r border-input text-muted-foreground hover:bg-muted/60 disabled:opacity-40">
         <Minus className="mx-auto h-3.5 w-3.5" aria-hidden="true" />
       </button>
@@ -84,12 +91,21 @@ export function OreInput({
             setErrore(false);
           }
         }}
-        title={errore ? 'Scrivere le ore come 7:30, 7,5 o 730' : 'Ore: 7:30, 7,5, 730 o 7h30'}
+        title={errore ? 'Scrivere le ore come 7:30' : 'Ore e minuti, per esempio 7:30 (vale anche 7,5 = sette ore e mezza)'}
         className="w-[4.5rem] min-w-0 bg-transparent px-1 text-center text-sm font-semibold tabular-nums outline-none placeholder:font-normal placeholder:text-muted-foreground/60"
       />
       <button type="button" tabIndex={-1} aria-label="Più" disabled={disabled || minuti >= tetto} onClick={() => fissa(minuti + passo)} className="w-8 shrink-0 border-l border-input text-muted-foreground hover:bg-muted/60 disabled:opacity-40">
         <Plus className="mx-auto h-3.5 w-3.5" aria-hidden="true" />
       </button>
+    </div>
+    {letto !== null ? (
+      <span
+        aria-live="polite"
+        className="pointer-events-none absolute left-1/2 top-full z-10 mt-0.5 -translate-x-1/2 whitespace-nowrap rounded bg-foreground px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-background shadow"
+      >
+        = {testoDaMinuti(letto) || '0:00'}
+      </span>
+    ) : null}
     </div>
   );
 }

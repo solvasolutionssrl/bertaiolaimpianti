@@ -242,6 +242,7 @@ export function PermessiClient({
               segnaposto="Tutti i tipi"
               etichettaNessuno="Tutti i tipi"
               segnapostoRicerca="Cerca un tipo…"
+              ricercaSempre
             />
           </div>
         ) : null}
@@ -627,21 +628,21 @@ function NuovaRichiestaDialog({
             )}
           </div>
 
-          {/* Tipo */}
-          <label className="block text-sm">
+          {/* Tipo: con la ricerca, come «Per chi» accanto */}
+          <div className="block text-sm">
             <span className="mb-1 block text-xs font-medium text-muted-foreground">Tipo</span>
-            <select
-              value={tipo}
-              onChange={(e) => onTipo(e.target.value)}
-              className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:border-primary focus:outline-none"
-            >
-              {tipiDisponibili.map((t) => (
-                <option key={t.codice} value={t.codice}>
-                  {t.label}
-                </option>
-              ))}
-            </select>
-          </label>
+            <Scelta
+              aria-label="Tipo"
+              opzioni={tipiDisponibili.map((t) => ({ valore: t.codice, etichetta: t.label }))}
+              valore={tipo || null}
+              onCambia={(v) => {
+                if (v) onTipo(v);
+              }}
+              segnaposto="Scegli il tipo…"
+              segnapostoRicerca="Cerca un tipo…"
+              ricercaSempre
+            />
+          </div>
 
           <label className="flex cursor-pointer items-center gap-2 text-sm">
             <input

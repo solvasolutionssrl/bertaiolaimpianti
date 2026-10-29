@@ -1,5 +1,7 @@
 'use client';
 
+import { AnteprimaOre } from '@/app/_components/anteprima-ore';
+import { oreDecimaliDaTesto } from '@kommessa/api/ore-testo';
 import * as React from 'react';
 import { Loader2, Search } from 'lucide-react';
 import {
@@ -93,9 +95,9 @@ export function EventoDialog({
       await showAlert({ title: 'Manca la causale', body: 'Selezionare la causale.' });
       return;
     }
-    const valore = Number(ore.replace(',', '.'));
+    const valore = ore.trim() === '' ? 0 : (oreDecimaliDaTesto(ore) ?? NaN);
     if (!Number.isFinite(valore) || valore < 0) {
-      await showAlert({ title: 'Ore non valide', body: 'Scrivi le ore in cifre, per esempio 1,50.' });
+      await showAlert({ title: 'Ore non valide', body: 'Scrivi le ore come ore e minuti, per esempio 1:30.' });
       return;
     }
 
@@ -273,10 +275,12 @@ export function EventoDialog({
                 inputMode="decimal"
                 value={ore}
                 onChange={(e) => setOre(e.target.value)}
+                placeholder="1:30"
                 className="mt-1 h-9 bg-background font-mono shadow-none"
               />
               <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
-                Le ore sono in centesimi: 1,50 corrisponde a un'ora e trenta minuti.
+                Scrivi ore e minuti, per esempio 1:30 per un&apos;ora e mezza.{' '}
+                <AnteprimaOre testo={ore} paghe />
               </p>
             </div>
 

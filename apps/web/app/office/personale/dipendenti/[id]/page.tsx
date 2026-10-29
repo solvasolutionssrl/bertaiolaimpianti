@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { COLONNE_QUOTE, quoteOre, sommaQuote, type RigaRapportinoLetta } from '@kommessa/api/kantiere-quote';
 import { createServerSupabase } from '@kommessa/api/server';
@@ -7,6 +6,8 @@ import { requireTenantContext } from '@kommessa/api/tenant';
 import { romeDay } from '@kommessa/api/rome-time';
 import { tenantHasModule } from '@/app/_lib/modules';
 import { leggiFunzioniPersonalizzate } from '@/app/_lib/personalizzazioni';
+import { caricaMonteOre } from '../../monte-ore/_lib/monte-ore';
+import { MonteOreCard } from '../../monte-ore/_components/monte-ore-card';
 import { DipendenteDetailClient } from './_components/dipendente-detail-client';
 import { giornateAperte } from '@/app/office/_actions/kantiere-rapportini';
 import { GiornateApertePanel } from '@/app/office/kantiere/rapportini/_components/giornate-aperte-panel';
@@ -95,6 +96,9 @@ export default async function DipendenteDetailPage({ params, searchParams }: Pag
   };
   // Il flag del forfettario lo legge solo l'export paghe: dove non c'e', non si mostra.
   const conExportPaghe = (await leggiFunzioniPersonalizzate(supabase, ctx.tenantId)).includes('export_paghe');
+  // Il monte ore del mese di questa persona: la stessa lettura della card di Analisi.
+  const meseMonteOre = romeDay(new Date()).slice(0, 7);
+  const monteOre = await caricaMonteOre(supabase, ctx.tenantId, meseMonteOre, { dipendenteId: params.id });
 
   // ── 2. Account collegato ──────────────────────────────────────────────────
   let accountNome: string | null = null;
@@ -439,14 +443,6 @@ export default async function DipendenteDetailPage({ params, searchParams }: Pag
   return (
     <div className="w-full space-y-4">
       <GiornateApertePanel giorni={giorniApertiDip} />
-      <div className="flex justify-end">
-        <Link
-          href={`/office/personale/monte-ore?dip=${dip.id}`}
-          className="text-sm font-medium text-primary hover:underline"
-        >
-          Monte ore del mese →
-        </Link>
-      </div>
       <DipendenteDetailClient
         dipendente={{
           id: dip.id,
@@ -462,6 +458,7 @@ export default async function DipendenteDetailPage({ params, searchParams }: Pag
           orarioForfettario: Boolean(dip.orario_forfettario),
         }}
         mostraForfettario={conExportPaghe}
+        monteOre={<MonteOreCard persona={monteOre.persone[0] ?? null} periodo={meseMonteOre} />}
         accountNome={accountNome}
         giorni={giorni}
         mezziGuidati={mezziGuidati}

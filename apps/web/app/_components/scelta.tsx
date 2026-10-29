@@ -81,6 +81,11 @@ interface BaseProps {
   className?: string;
   /** Larghezza dell'elenco. Default: come il tasto. */
   larghezzaElenco?: 'tasto' | 'auto';
+  /**
+   * La casella di ricerca anche sotto la soglia delle voci: dove accanto c'e'
+   * gia' un campo con la ricerca, uno senza sembra rotto (28/10/2026).
+   */
+  ricercaSempre?: boolean;
   'aria-label'?: string;
   id?: string;
 }
@@ -275,6 +280,7 @@ function Elenco({
   piede,
   onTastiera,
   toggleAperto,
+  ricercaSempre = false,
 }: {
   opzioni: VoceAppiattita[];
   query: string;
@@ -293,8 +299,9 @@ function Elenco({
   onTastiera: (e: React.KeyboardEvent) => void;
   /** Apre o chiude i figli di una voce (le fasi di un cantiere). */
   toggleAperto: (valore: string) => void;
+  ricercaSempre?: boolean;
 }) {
-  const conRicerca = opzioni.length > SOGLIA_RICERCA || query.length > 0;
+  const conRicerca = ricercaSempre || opzioni.length > SOGLIA_RICERCA || query.length > 0;
   const rifLista = React.useRef<HTMLDivElement>(null);
   const rifRicerca = React.useRef<HTMLInputElement>(null);
   const rifPannello = React.useRef<HTMLDivElement>(null);
@@ -704,6 +711,7 @@ export function Scelta({
   disabilitato,
   className,
   larghezzaElenco = 'tasto',
+  ricercaSempre = false,
   id,
   ...aria
 }: SceltaProps) {
@@ -783,6 +791,7 @@ const VUOTO = '\u0000nessuno';
           idElenco={idElenco}
           onTastiera={tastiera}
           toggleAperto={t.toggleAperto}
+          ricercaSempre={ricercaSempre}
         />
       ) : null}
     </div>
@@ -832,6 +841,7 @@ export function SceltaMultipla({
   disabilitato,
   className,
   larghezzaElenco = 'tasto',
+  ricercaSempre = false,
   id,
   ...aria
 }: SceltaMultiplaProps) {
@@ -969,6 +979,7 @@ export function SceltaMultipla({
               </span>
             </div>
           }
+          ricercaSempre={ricercaSempre}
         />
       ) : null}
     </div>

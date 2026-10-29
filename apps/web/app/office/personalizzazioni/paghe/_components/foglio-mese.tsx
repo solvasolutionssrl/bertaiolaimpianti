@@ -1,5 +1,7 @@
 'use client';
 
+import { AnteprimaOre } from '@/app/_components/anteprima-ore';
+import { oreDecimaliDaTesto } from '@kommessa/api/ore-testo';
 import * as React from 'react';
 import { Check, Loader2, Repeat, Search, X } from 'lucide-react';
 import { Button, Card, CardContent, Input } from '@kommessa/ui';
@@ -164,11 +166,11 @@ export function FoglioMese({ mese, eventiPerDip, catalogo, onAggiornato }: Fogli
       await showAlert({ title: 'Manca la causale', body: 'Selezionare la causale del giorno.' });
       return;
     }
-    const valore = Number(quante.replace(',', '.'));
+    const valore = oreDecimaliDaTesto(quante) ?? NaN;
     if (!Number.isFinite(valore) || valore <= 0) {
       await showAlert({
         title: 'Ore non valide',
-        body: 'Scrivi le ore in cifre, per esempio 8 oppure 1,50.',
+        body: 'Scrivi le ore come ore e minuti, per esempio 8:00 oppure 1:30.',
       });
       return;
     }
@@ -489,8 +491,10 @@ export function FoglioMese({ mese, eventiPerDip, catalogo, onAggiornato }: Fogli
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') void salva();
                     }}
+                    placeholder="1:30"
                     className="h-8 bg-background font-mono text-[13px] shadow-none"
                   />
+                  <AnteprimaOre testo={quante} paghe className="mt-0.5 block" />
                 </div>
                 <div>
                   <label className="block text-[10px] text-muted-foreground" htmlFor="fino-g">

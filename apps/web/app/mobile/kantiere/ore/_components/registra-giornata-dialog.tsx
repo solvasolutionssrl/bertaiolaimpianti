@@ -436,10 +436,10 @@ export function RegistraGiornataDialog({
           fineIso: riallocazione.fineIso,
           nettoMin: riallocazione.nettoMin,
           pausaTimbrataMin: riallocazione.pausaTimbrataMin,
-          inizioFisico: false,
-          fineFisica: false,
+          inizioFisico: riallocazione.estremiInSede,
+          fineFisica: riallocazione.estremiInSede,
           primoCantiere: null,
-          dalTerminale: false,
+          dalTerminale: riallocazione.dalTerminale,
         }
       : null);
   const pausaBloccata = !!riallocazione && riallocazione.pausaTimbrataMin > 0;
