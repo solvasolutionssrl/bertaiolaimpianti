@@ -25,6 +25,8 @@ export function MonteOreCard(
   );
 }
 
+const PER_PARTE = 8;
+
 const tono = (m: number) =>
   m > 0 ? 'text-emerald-700 dark:text-emerald-400' : m < 0 ? 'text-rose-700 dark:text-rose-400' : 'text-muted-foreground';
 
@@ -36,8 +38,9 @@ const oreHM = (minuti: number) => {
 function Squadra({ persone, periodo }: { persone: MonteOrePersona[]; periodo: string }) {
   const conOre = persone.filter((p) => p.saldo.giorniLavorati > 0);
   const ordinate = [...conOre].sort((a, b) => b.saldo.margine - a.saldo.margine);
-  const sopra = ordinate.filter((p) => p.saldo.margine > 0).slice(0, 3);
-  const sotto = ordinate.filter((p) => p.saldo.margine < 0).reverse().slice(0, 3);
+  // Otto per parte: la card e' alta quanto la colonna di Analisi e ci stanno.
+  const sopra = ordinate.filter((p) => p.saldo.margine > 0).slice(0, PER_PARTE);
+  const sotto = ordinate.filter((p) => p.saldo.margine < 0).reverse().slice(0, PER_PARTE);
   return (
     <>
       {conOre.length === 0 ? (
